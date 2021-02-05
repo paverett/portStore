@@ -1,5 +1,7 @@
 ### portStore
 
+[<img src="https://img.shields.io/badge/vert.x-4.0.1-purple.svg">](https://vertx.io)
+
 ## Building
 
 To launch your tests:

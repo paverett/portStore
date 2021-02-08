@@ -1,114 +1,127 @@
 package com.portStore;
 
+import java.util.List;
+
+import com.portStore.helpers.ResponseFormatter;
+import com.portStore.model.Price;
+import com.portStore.model.Product;
+import com.portStore.service.PriceService;
+import com.portStore.service.PriceServiceImpl;
+import com.portStore.service.ProductService;
+import com.portStore.service.ProductServiceImpl;
+
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.CompositeFuture;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
+import io.vertx.core.impl.logging.Logger;
+import io.vertx.core.impl.logging.LoggerFactory;
 import io.vertx.core.json.JsonObject;
-import io.vertx.core.json.JsonArray;
-import io.vertx.ext.mongo.MongoClient;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
-import io.vertx.ext.web.client.WebClient;
 
 public class MainVerticle extends AbstractVerticle {
 
-  MongoClient mongoClient;
-  WebClient client;
+  private static final Logger log = LoggerFactory.getLogger(MainVerticle.class);
+
+  private static final int PORT = 8888;
+
+  private PriceService priceService;
+  private ProductService productService;
 
   @Override
   public void start(Promise<Void> startPromise) throws Exception {
     Router router = Router.router(vertx);
 
-    router.get("/products/:productId").handler(this::getProducts);
-    router.put("/products/:productId").handler(this::updateProduct);
+    router.get("/products/:productId").handler(this::getProduct);
+    router.put("/products/:productId").handler(this::updatePrice);
 
-    JsonObject mongoConfig = new JsonObject();
-    mongoConfig.put("http.port", 27017);
-    mongoConfig.put("db_name", "products");
-    mongoConfig.put("connection_string", "mongodb://localhost:27017");
+    priceService = initService();
+    productService = initProductService();
 
-    mongoClient = MongoClient.createShared(vertx, mongoConfig);
-
-    client = WebClient.create(vertx);
-
-    vertx.createHttpServer()
-    .requestHandler(router)
-    .listen(8888, http -> {
+    vertx.createHttpServer().requestHandler(router).listen(PORT, http -> {
       if (http.succeeded()) {
         startPromise.complete();
-        System.out.println("HTTP server started on port 8888");
+        log.info("HTTP server started on port 8888");
       } else {
         startPromise.fail(http.cause());
       }
     });
   }
 
-  private void getProducts(RoutingContext ctx) {
+  private PriceServiceImpl initService() {
+    JsonObject mongoConfig = new JsonObject();
+    mongoConfig.put("http.port", 27017);
+    mongoConfig.put("db_name", "prices");
+    mongoConfig.put("connection_string", "mongodb://localhost:27017");
+    return new PriceServiceImpl(vertx, mongoConfig);
+  }
+
+  private ProductServiceImpl initProductService() {
+    return new ProductServiceImpl(vertx);
+  }
+
+  private void getProduct(RoutingContext ctx) {
     String productId = ctx.pathParam("productId");
 
-    CompositeFuture cf = CompositeFuture.join(getProductInfo(productId), getPriceInfo(productId));
+    CompositeFuture cf = CompositeFuture.join(getPriceFuture(productId), getProductFuture(productId));
     cf.onComplete(cfHandler -> {
       if (cfHandler.succeeded()) {
-        String productName = cf.list().get(0).toString();
-        JsonArray priceList = new JsonArray(cf.list().get(1).toString());
-        JsonObject response = new JsonObject();
-        response.put("id", Integer.parseInt(productId));
-        response.put("name", productName);
-        response.put("prices", priceList);
-        ctx.response()
-        .putHeader("content-type", "application/json; charset=utf-8")
-        .end(response.encode());
+        List<Object> futures = cf.list();
+        log.info(futures.toString());
+        Product product = (Product) futures.get(1);
+        String productName = product.getName();
+        new JsonObject();
+        JsonObject priceList = JsonObject.mapFrom(futures.get(0));
+        ctx.response().putHeader("content-type", "application/json; charset=utf-8")
+            .end(ResponseFormatter.formSuccessResponse(productId, productName, priceList)
+            .encode());
       } else if (cfHandler.failed()) {
-        JsonObject response = new JsonObject();
-        response.put("message", "Error recieving information");
+        log.info(cfHandler.cause());
         ctx.response()
-        .putHeader("content-type", "application/json; charset=utf-8")
-        .end(response.encode());
+          .putHeader("content-type", "application/json; charset=utf-8")
+          .end(ResponseFormatter.formErrorResponse(cfHandler.cause().toString(), "")
+          .encode());
       }
     });
   }
 
-  private void updateProduct(RoutingContext ctx) {
-    String productID = ctx.pathParam("productId");
-    System.out.println(productID);
-    JsonObject response = new JsonObject();
-    response.put("message", "Complete");
-    ctx.response()
-        .putHeader("content-type", "application/json; charset=utf-8")
-        .end(response.encode());
-  }
-
-  Future<String> getProductInfo(String productId) {
+  Future<Price> getPriceFuture(String productId) {
     return Future.future(f -> {
-      client
-        .get(443, "redsky.target.com", 
-          String.format("/v3/pdp/tcin/%s?excludes=taxonomy,price,promotion,bulk_ship,rating_and_review_reviews,rating_and_review_statistics,question_answer_statistics&key=candidate", productId))
-        .ssl(true)
-        .send()
-        .onSuccess(handler -> {
-          JsonObject productInfo = handler.bodyAsJsonObject();
-          String productName = productInfo.getJsonObject("product").getJsonObject("item").getJsonObject("product_description").getString("title");
-          f.complete(productName);
-        })
-        .onFailure(handler -> {
-          f.fail("Error recieving response from downstream service");
-        });
+      priceService.getPrice(productId, resultHandler -> {
+        if (resultHandler.succeeded()) {
+          f.complete(resultHandler.result());
+        } else {
+          f.fail(resultHandler.cause());
+        }
+      });
     });
   }
 
-  Future<JsonArray> getPriceInfo(String productId) {
+  Future<Product> getProductFuture(String productId) {
     return Future.future(f -> {
-      JsonObject mongoQuery = new JsonObject();
-      mongoQuery.put("id", Integer.parseInt(productId));
-      mongoClient.find("products", mongoQuery, handler -> {
-        if (handler.succeeded()) {
-          JsonArray priceList = handler.result().get(0).getJsonArray("price_list");
-          f.complete(priceList);
-        } else if (handler.failed()) {
-          f.fail("Error recieving response from mongodb");
+      productService.getProduct(productId, resultHandler -> {
+        if (resultHandler.succeeded()) {
+          f.complete(resultHandler.result());
+        } else {
+          f.fail(resultHandler.cause());
         }
       });
+    });
+  }
+
+  private void updatePrice(RoutingContext ctx) {
+    String productId = ctx.pathParam("productId");
+    JsonObject newPrice = ctx.getBodyAsJson();
+    priceService.updatePrice(productId, newPrice, resultHandler -> {
+      if (resultHandler.succeeded()) {
+        JsonObject response = new JsonObject();
+        response.put("message", "OK");
+        ctx.response().putHeader("content-type", "application/json; charset=utf-8").end(response.encode());
+      } else {
+        ctx.response().putHeader("content-type", "application/json;")
+          .end(ResponseFormatter.formErrorResponse("Failed", resultHandler.cause().toString()).encode());
+      }
     });
   }
 }

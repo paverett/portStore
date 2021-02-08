@@ -19,6 +19,7 @@ import io.vertx.core.impl.logging.LoggerFactory;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
+import io.vertx.ext.web.handler.BodyHandler;
 
 public class MainVerticle extends AbstractVerticle {
 
@@ -32,6 +33,8 @@ public class MainVerticle extends AbstractVerticle {
   @Override
   public void start(Promise<Void> startPromise) throws Exception {
     Router router = Router.router(vertx);
+
+    router.route("/products/:productId").handler(BodyHandler.create());
 
     router.get("/products/:productId").handler(this::getProduct);
     router.put("/products/:productId").handler(this::updatePrice);
@@ -73,13 +76,13 @@ public class MainVerticle extends AbstractVerticle {
         String productName = product.getName();
         new JsonObject();
         JsonObject priceList = JsonObject.mapFrom(futures.get(0));
-        ctx.response().putHeader("content-type", "application/json; charset=utf-8")
+        ctx.response().putHeader("content-type", "application/json;")
             .end(ResponseFormatter.formSuccessResponse(productId, productName, priceList)
             .encode());
       } else if (cfHandler.failed()) {
         log.info(cfHandler.cause());
         ctx.response()
-          .putHeader("content-type", "application/json; charset=utf-8")
+          .putHeader("content-type", "application/json;")
           .end(ResponseFormatter.formErrorResponse(cfHandler.cause().toString(), "")
           .encode());
       }
@@ -117,7 +120,7 @@ public class MainVerticle extends AbstractVerticle {
       if (resultHandler.succeeded()) {
         JsonObject response = new JsonObject();
         response.put("message", "OK");
-        ctx.response().putHeader("content-type", "application/json; charset=utf-8").end(response.encode());
+        ctx.response().putHeader("content-type", "application/json;").end(response.encode());
       } else {
         ctx.response().putHeader("content-type", "application/json;")
           .end(ResponseFormatter.formErrorResponse("Failed", resultHandler.cause().toString()).encode());

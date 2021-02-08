@@ -10,7 +10,7 @@ public class Price {
 
   public Price(JsonObject response) {
     value = response.getJsonObject("price").getFloat("value");
-    currencyCode = response.getJsonObject("price").getString("currency_code");
+    currencyCode = response.getJsonObject("price").getString("currencyCode");
   }
 
   public Float getValue() {

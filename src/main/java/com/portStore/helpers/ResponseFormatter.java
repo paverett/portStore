@@ -7,7 +7,7 @@ public class ResponseFormatter {
     JsonObject response = new JsonObject();
     response.put("id", Integer.parseInt(productId));
     response.put("name", productName);
-    response.put("currentPrice", priceList);
+    response.put("price", priceList);
     return response;
   }
 

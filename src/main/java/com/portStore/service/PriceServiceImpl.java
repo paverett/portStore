@@ -48,8 +48,11 @@ public class PriceServiceImpl implements PriceService {
 
   public void updatePrice(String productId, JsonObject newPrice, Handler<AsyncResult<String>> resultHandler) {
     JsonObject mongoQuery = new JsonObject().put("id", productId);
-    mongoClient.findOneAndUpdate(COLLECTION, mongoQuery, newPrice, handler -> {
+    newPrice.mergeIn(mongoQuery);
+    log.info(newPrice.toString());
+    mongoClient.findOneAndReplace(COLLECTION, mongoQuery, newPrice, handler -> {
       if (handler.succeeded()) {
+        log.info(handler.result());
         resultHandler.handle(Future.succeededFuture("OK"));
       } else {
         resultHandler.handle(Future.failedFuture(handler.cause()));

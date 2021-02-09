@@ -4,20 +4,24 @@ import io.vertx.core.json.JsonObject;
 
 public class Price {
 
-  private Float value;
+  private double value;
 
   private String currencyCode;
 
   public Price(JsonObject response) {
-    value = response.getJsonObject("price").getFloat("value");
+    value = response.getJsonObject("price").getDouble("value");
     currencyCode = response.getJsonObject("price").getString("currencyCode");
   }
 
-  public Float getValue() {
+  public Price() {
+
+  }
+
+  public double getValue() {
     return value;
   }
 
-  public void setValue(Float value) {
+  public void setValue(double value) {
     this.value = value;
   }
 

@@ -3,7 +3,6 @@ package com.portStore;
 import java.util.List;
 
 import com.portStore.helpers.ResponseFormatter;
-import com.portStore.model.Price;
 import com.portStore.model.Product;
 import com.portStore.service.PriceService;
 import com.portStore.service.PriceServiceImpl;
@@ -12,7 +11,6 @@ import com.portStore.service.ProductServiceImpl;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.CompositeFuture;
-import io.vertx.core.Future;
 import io.vertx.core.Promise;
 import io.vertx.core.impl.logging.Logger;
 import io.vertx.core.impl.logging.LoggerFactory;
@@ -67,7 +65,7 @@ public class MainVerticle extends AbstractVerticle {
   private void getProduct(RoutingContext ctx) {
     String productId = ctx.pathParam("productId");
 
-    CompositeFuture cf = CompositeFuture.join(getPriceFuture(productId), getProductFuture(productId));
+    CompositeFuture cf = CompositeFuture.join(priceService.getPrice(productId), productService.getProduct(productId));
     cf.onComplete(cfHandler -> {
       if (cfHandler.succeeded()) {
         List<Object> futures = cf.list();
@@ -77,54 +75,25 @@ public class MainVerticle extends AbstractVerticle {
         new JsonObject();
         JsonObject priceList = JsonObject.mapFrom(futures.get(0));
         ctx.response().putHeader("content-type", "application/json;")
-            .end(ResponseFormatter.formSuccessResponse(productId, productName, priceList)
-            .encode());
+            .end(ResponseFormatter.formSuccessResponse(productId, productName, priceList).encode());
       } else if (cfHandler.failed()) {
         log.info(cfHandler.cause());
-        ctx.response()
-          .putHeader("content-type", "application/json;")
-          .end(ResponseFormatter.formErrorResponse(cfHandler.cause().toString(), "")
-          .encode());
+        ctx.response().putHeader("content-type", "application/json;")
+            .end(ResponseFormatter.formErrorResponse(cfHandler.cause().toString(), "").encode());
       }
-    });
-  }
-
-  Future<Price> getPriceFuture(String productId) {
-    return Future.future(f -> {
-      priceService.getPrice(productId, resultHandler -> {
-        if (resultHandler.succeeded()) {
-          f.complete(resultHandler.result());
-        } else {
-          f.fail(resultHandler.cause());
-        }
-      });
-    });
-  }
-
-  Future<Product> getProductFuture(String productId) {
-    return Future.future(f -> {
-      productService.getProduct(productId, resultHandler -> {
-        if (resultHandler.succeeded()) {
-          f.complete(resultHandler.result());
-        } else {
-          f.fail(resultHandler.cause());
-        }
-      });
     });
   }
 
   private void updatePrice(RoutingContext ctx) {
     String productId = ctx.pathParam("productId");
     JsonObject newPrice = ctx.getBodyAsJson();
-    priceService.updatePrice(productId, newPrice, resultHandler -> {
-      if (resultHandler.succeeded()) {
-        JsonObject response = new JsonObject();
-        response.put("message", "OK");
-        ctx.response().putHeader("content-type", "application/json;").end(response.encode());
-      } else {
-        ctx.response().putHeader("content-type", "application/json;")
-          .end(ResponseFormatter.formErrorResponse("Failed", resultHandler.cause().toString()).encode());
-      }
+    priceService.updatePrice(productId, newPrice).onSuccess(handler -> {
+      JsonObject response = new JsonObject();
+      response.put("message", "OK");
+      ctx.response().putHeader("content-type", "application/json;").end(response.encode());
+    }).onFailure(handler -> {
+      ctx.response().putHeader("content-type", "application/json;")
+          .end(ResponseFormatter.formErrorResponse("Failed", handler.getMessage()).encode());
     });
   }
 }

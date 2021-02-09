@@ -2,9 +2,7 @@ package com.portStore.service;
 
 import com.portStore.model.Product;
 
-import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
-import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.impl.logging.Logger;
 import io.vertx.core.impl.logging.LoggerFactory;
@@ -23,15 +21,20 @@ public class ProductServiceImpl implements ProductService {
     this.webClient = WebClient.create(vertx);
   }
 
-  public void getProduct(String productId, Handler<AsyncResult<Product>> resultHandler) {
-    webClient.get(443, "redsky.target.com", String.format(
+  public Future<Product> getProduct(String productId) {
+    return Future.future(f -> {
+      webClient.get(443, "redsky.target.com", String.format(
         "/v3/pdp/tcin/%s?excludes=taxonomy,price,promotion,bulk_ship,rating_and_review_reviews,rating_and_review_statistics,question_answer_statistics&key=candidate",
-        productId)).ssl(true).send().onSuccess(handler -> {
+        productId))
+          .ssl(true)
+          .send()
+          .onSuccess(handler -> {
           JsonObject productInfo = handler.bodyAsJsonObject();
-          resultHandler.handle(Future.succeededFuture(new Product(productInfo)));
+          f.complete(new Product(productInfo));
         }).onFailure(handler -> {
-          resultHandler.handle(Future.failedFuture(handler.getCause()));
+          f.fail(handler.getCause());
         });
+    });
   }
 
 }

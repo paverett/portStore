@@ -3,11 +3,11 @@ package com.portStore.helpers;
 import io.vertx.core.json.JsonObject;
 
 public class ResponseFormatter {
-  public static JsonObject formSuccessResponse(String productId, String productName, JsonObject priceList) {
+  public static JsonObject formSuccessResponse(String productId, String productName, JsonObject price) {
     JsonObject response = new JsonObject();
     response.put("id", Integer.parseInt(productId));
     response.put("name", productName);
-    response.put("price", priceList);
+    response.put("price", price);
     return response;
   }
 
